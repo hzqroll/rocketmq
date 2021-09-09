@@ -760,13 +760,14 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     }
 
     /**
+     * 创建主题
      * Create a topic on broker. This method will be removed in a certain version after April 5, 2020, so please do not
      * use this method.
      *
-     * @param key accesskey
-     * @param newTopic topic name
-     * @param queueNum topic's queue number
-     * @param topicSysFlag topic system flag
+     * @param key accesskey 目前未使用，可以与newTopic相同
+     * @param newTopic topic name 主题名称
+     * @param queueNum topic's queue number 队列数量
+     * @param topicSysFlag topic system flag 主题系统标签，默认为0
      * @throws MQClientException if there is any client error.
      */
     @Deprecated

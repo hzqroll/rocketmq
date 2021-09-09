@@ -73,8 +73,13 @@ public class NamesrvController {
         this.configuration.setStorePathFromConfig(this.namesrvConfig, "configStorePath");
     }
 
+    /**
+     * 根据启动属性创建NameController实例，并初始化该实例，NameServerController实例为NaeServer核心控制器
+     * @return 是否初始化成功
+     */
     public boolean initialize() {
-
+        // 加载 KV 配置，创建 NettyServer 网络处理对象，
+        // 然后开启两个定时任务，在 RocketMQ 中此类定时任务统称为心跳检测 。
         this.kvConfigManager.load();
 
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
@@ -83,7 +88,7 @@ public class NamesrvController {
             Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
 
         this.registerProcessor();
-
+        // 每隔10s扫描一次不活跃的broker，一处处于不激活状态的broker
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -91,7 +96,7 @@ public class NamesrvController {
                 NamesrvController.this.routeInfoManager.scanNotActiveBroker();
             }
         }, 5, 10, TimeUnit.SECONDS);
-
+        // 每隔10s打印一次kv配置
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override

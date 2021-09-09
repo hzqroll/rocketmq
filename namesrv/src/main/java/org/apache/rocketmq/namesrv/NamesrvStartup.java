@@ -78,7 +78,9 @@ public class NamesrvStartup {
             System.exit(-1);
             return null;
         }
-
+        // 从代码我们可以知道先创建 NameServerConfig ( NameServer 业务参数 ）、
+        // NettyServerConfig ( NameServer 网络参数），
+        // 然后在解析启动时把指定的配置文件或启 动命令 中的选项 值，填充到 nameServerConfig,nettyServerConfig 对象
         final NamesrvConfig namesrvConfig = new NamesrvConfig();
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
         nettyServerConfig.setListenPort(9876);
