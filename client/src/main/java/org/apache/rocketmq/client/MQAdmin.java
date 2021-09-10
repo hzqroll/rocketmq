@@ -48,6 +48,7 @@ public interface MQAdmin {
         throws MQClientException;
 
     /**
+     * 根据时间戳从队列中查找偏移量
      * Gets the message queue offset according to some time in milliseconds<br>
      * be cautious to call because of more IO overhead
      *
@@ -58,6 +59,7 @@ public interface MQAdmin {
     long searchOffset(final MessageQueue mq, final long timestamp) throws MQClientException;
 
     /**
+     * 查找队列中最大的无力偏移量
      * Gets the max offset
      *
      * @param mq Instance of MessageQueue
@@ -91,19 +93,21 @@ public interface MQAdmin {
         InterruptedException, MQClientException;
 
     /**
+     * 根据偏移量查找消息
      * Query messages
      *
      * @param topic message topic
-     * @param key message key index word
-     * @param maxNum max message number
-     * @param begin from when
-     * @param end to when
+     * @param key message key index word 消息索引字段
+     * @param maxNum max message number 本次最多取出消息数量
+     * @param begin from when 开始时间
+     * @param end to when 结束时间
      * @return Instance of QueryResult
      */
     QueryResult queryMessage(final String topic, final String key, final int maxNum, final long begin,
         final long end) throws MQClientException, InterruptedException;
 
     /**
+     * 根据主题与消息id查找消息
      * @return The {@code MessageExt} of given msgId
      */
     MessageExt viewMessage(String topic,

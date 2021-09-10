@@ -62,11 +62,20 @@ public class ClientConfig {
 
     private LanguageCode language = LanguageCode.JAVA;
 
+    /**
+     * clientId为客户端IP+intance+（unitname），如果在同一台物理机服务器部署两个应用服务，应用程序ID会不会相同呢
+     * 为了避免这个问题，如果instance为默认值DEFAULT的话，RocketMQ会自动将instance设置为进程ID，
+     * 这样避免了不同进程的相互影响，但同一个NM中的不同消费者和不同生产者在启动时获取到的MQC!ientlnstane实例都是同一个。
+     * 根据后面的介绍，MQClientlnstance封装了RocketMQ网络处理API，
+     * 是消息生产者（Producer）、消息消费者(Consumer）与NameServ町、Broker打交道的网络通道。
+     * @return clientId
+     */
     public String buildMQClientId() {
         StringBuilder sb = new StringBuilder();
         sb.append(this.getClientIP());
 
         sb.append("@");
+        // 这里的instanceName，如果是default，则会设置为进程ID+时间戳，所以不会重复
         sb.append(this.getInstanceName());
         if (!UtilAll.isBlank(this.unitName)) {
             sb.append("@");

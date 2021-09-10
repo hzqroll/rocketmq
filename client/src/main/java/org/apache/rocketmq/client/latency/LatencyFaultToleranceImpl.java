@@ -35,6 +35,7 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         if (null == old) {
             final FaultItem faultItem = new FaultItem(name);
             faultItem.setCurrentLatency(currentLatency);
+            // 系统时间+需要规避的时长
             faultItem.setStartTimestamp(System.currentTimeMillis() + notAvailableDuration);
 
             old = this.faultItemTable.putIfAbsent(name, faultItem);
@@ -96,9 +97,15 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
             '}';
     }
 
+    // 条目类目（规避规则条目）
     class FaultItem implements Comparable<FaultItem> {
+        /**
+         * 条目唯一健，brokerName
+         */
         private final String name;
+        // 本次消息发送延迟
         private volatile long currentLatency;
+        // 故障规避开始时间
         private volatile long startTimestamp;
 
         public FaultItem(final String name) {
@@ -129,7 +136,7 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
 
             return 0;
         }
-
+        // 规避开始时间过期
         public boolean isAvailable() {
             return (System.currentTimeMillis() - startTimestamp) >= 0;
         }
