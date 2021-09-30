@@ -413,7 +413,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
         MessageExtBrokerInner msgInner = new MessageExtBrokerInner();
         msgInner.setTopic(requestHeader.getTopic());
         msgInner.setQueueId(queueIdInt);
-
+        // 如果消息重试达到最大重试次数，消息江津区DLQ队列，延迟队列主题：DLQ+消费组名
         if (!handleRetryAndDLQ(requestHeader, response, request, msgInner, topicConfig)) {
             return response;
         }
@@ -442,6 +442,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             }
             putMessageResult = this.brokerController.getTransactionalMessageService().prepareMessage(msgInner);
         } else {
+            // 调用DafaultMessageStore#putMessage进行消息存储
             putMessageResult = this.brokerController.getMessageStore().putMessage(msgInner);
         }
 
