@@ -220,7 +220,7 @@ public class ConsumeQueue {
         }
         return 0;
     }
-
+    // 此步的目的是首先删除指定偏移量processOffset所在文件之后的逻辑文件，其次是修正所在文件对应的MappedFile对象的写入位置和提交位置两个变量。
     public void truncateDirtyLogicFiles(long phyOffet) {
 
         int logicFileSize = this.mappedFileSize;

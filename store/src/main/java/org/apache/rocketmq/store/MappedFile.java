@@ -42,28 +42,45 @@ import org.apache.rocketmq.store.config.FlushDiskType;
 import org.apache.rocketmq.store.util.LibC;
 import sun.nio.ch.DirectBuffer;
 
+/**
+ * 内存映射文件的具体实现
+ */
 public class MappedFile extends ReferenceResource {
+    // 操作系统每页大小，默认4k
     public static final int OS_PAGE_SIZE = 1024 * 4;
     protected static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
-
+    // 当前JVM中MappedFile虚拟内存
     private static final AtomicLong TOTAL_MAPPED_VIRTUAL_MEMORY = new AtomicLong(0);
-
+    // 当前JVM中MappedFile实例个数
     private static final AtomicInteger TOTAL_MAPPED_FILES = new AtomicInteger(0);
+    // 当前文件的写指针，从0开始（内存映射文件中的写指针）
     protected final AtomicInteger wrotePosition = new AtomicInteger(0);
+    // 当前文件的提交指针，如果开启了transientStorePoolEnable，则数据会存储在TransientStorePool中，然后提交到内存映射Bytebuffer中吗，再刷新到磁盘中
     protected final AtomicInteger committedPosition = new AtomicInteger(0);
+    // 刷写到磁盘指针，该指针之前的数据持久化道磁盘中
     private final AtomicInteger flushedPosition = new AtomicInteger(0);
+    // 文件大小
     protected int fileSize;
+    // channel
     protected FileChannel fileChannel;
     /**
      * Message will put to here first, and then reput to FileChannel if writeBuffer is not null.
+     * 堆内存Bytebuffer，如果不为空，数据首先存储在该buffer中，然后提交到MappedFile对应的内存映射文件buffer，transientStorePoolEnable为true时不为空
      */
     protected ByteBuffer writeBuffer = null;
+    // 堆内存池
     protected TransientStorePool transientStorePool = null;
+    // 文件名称
     private String fileName;
+    // 该文件的初始便有量
     private long fileFromOffset;
+    // 物理文件
     private File file;
+    // 物理文件对应的内存映射buffer
     private MappedByteBuffer mappedByteBuffer;
+    // 文件最后一次写入内容的时间
     private volatile long storeTimestamp = 0;
+    // 是否时mappedFileQueue队列中的第一个文件
     private boolean firstCreateInQueue = false;
 
     public MappedFile() {
@@ -346,6 +363,7 @@ public class MappedFile extends ReferenceResource {
     }
 
     private boolean isAbleToFlush(final int flushLeastPages) {
+        // 刷写到磁盘指针，该指针之前的数据持久化道磁盘中
         int flush = this.flushedPosition.get();
         int write = getReadPosition();
 
@@ -484,6 +502,7 @@ public class MappedFile extends ReferenceResource {
      * @return The max position which have valid data
      */
     public int getReadPosition() {
+        // 如果不为空，表示数据现存放在临时内存中
         return this.writeBuffer == null ? this.wrotePosition.get() : this.committedPosition.get();
     }
 
@@ -491,8 +510,16 @@ public class MappedFile extends ReferenceResource {
         this.committedPosition.set(pos);
     }
 
+    /**
+     * https://yongliangcode.github.io/posts/708c22d7/
+     * mappedByteBuffer 已经通过 mmap 映射，此时操作系统中只是记录了该文件和该 Buffer 的映射关系，而没有映射到物理内存中。这里就通过对该 MappedFile 的每个 Page Cache 进行写入一个字节，通过读写操作把 mmap 映射全部加载到物理内存中。
+     * 使用mmap()内存分配时，只是建立了进程虚拟地址空间，并没有分配虚拟内存对应的物理内存。当进程访问这些没有建立映射关系的虚拟内存时，处理器自动触发一个缺页异常，进而进入内核空间分配物理内存、更新进程缓存表，最后返回用户空间，回复进程运行。
+     * @param type 刷盘方式
+     * @param pages 刷的页大小
+     */
     public void warmMappedFile(FlushDiskType type, int pages) {
         long beginTime = System.currentTimeMillis();
+        // slice的作用是创建一个buffer大小相同的内存，共享操作
         ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
         int flush = 0;
         long time = System.currentTimeMillis();
@@ -506,10 +533,11 @@ public class MappedFile extends ReferenceResource {
                 }
             }
 
-            // prevent gc
+            // prevent gc 防止gc？
             if (j % 1000 == 0) {
                 log.info("j={}, costTime={}", j, System.currentTimeMillis() - time);
                 time = System.currentTimeMillis();
+                // 进入睡眠是为了防止一直独占cpu
                 try {
                     Thread.sleep(0);
                 } catch (InterruptedException e) {
@@ -526,7 +554,7 @@ public class MappedFile extends ReferenceResource {
         }
         log.info("mapped file warm-up done. mappedFile={}, costTime={}", this.getFileName(),
             System.currentTimeMillis() - beginTime);
-
+        // 该方法主要是实现文件预热后，防止把预热过的文件被操作系统调到swap空间中。当程序在次读取交换出去的数据的时候会产生缺页异常。
         this.mlock();
     }
 

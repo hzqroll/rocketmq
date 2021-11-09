@@ -133,7 +133,7 @@ public class AllocateMappedFileService extends ServiceThread {
 
     public void run() {
         log.info(this.getServiceName() + " service started");
-
+        // 不停循环
         while (!this.isStopped() && this.mmapOperation()) {
 
         }
@@ -147,6 +147,7 @@ public class AllocateMappedFileService extends ServiceThread {
         boolean isSuccess = false;
         AllocateRequest req = null;
         try {
+            // 从优先级队列中获取当前的文件创建对象请求，永远获取最后一个文件创建请求
             req = this.requestQueue.take();
             AllocateRequest expectedRequest = this.requestTable.get(req.getFilePath());
             if (null == expectedRequest) {
@@ -154,6 +155,7 @@ public class AllocateMappedFileService extends ServiceThread {
                     + req.getFileSize());
                 return true;
             }
+            // todo 后面再看，不太理解为什么这里比较这个  如果当前文件请求不等于
             if (expectedRequest != req) {
                 log.warn("never expected here,  maybe cause timeout " + req.getFilePath() + " "
                     + req.getFileSize() + ", req:" + req + ", expectedRequest:" + expectedRequest);
@@ -164,6 +166,7 @@ public class AllocateMappedFileService extends ServiceThread {
                 long beginTime = System.currentTimeMillis();
 
                 MappedFile mappedFile;
+                // 如果支持transientStorePool
                 if (messageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
                     try {
                         mappedFile = ServiceLoader.load(MappedFile.class).iterator().next();
@@ -183,7 +186,8 @@ public class AllocateMappedFileService extends ServiceThread {
                         + " " + req.getFilePath() + " " + req.getFileSize());
                 }
 
-                // pre write mappedFile
+                // pre write mappedFile 预热mappedFile
+                // 如果文件大小大于1G，并且开启了预热开关，进行文件预热
                 if (mappedFile.getFileSize() >= this.messageStore.getMessageStoreConfig()
                     .getMappedFileSizeCommitLog()
                     &&

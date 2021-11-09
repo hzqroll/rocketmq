@@ -38,6 +38,7 @@ public class TransientStorePool {
 
     public TransientStorePool(final MessageStoreConfig storeConfig) {
         this.storeConfig = storeConfig;
+        // transientStorePoolSize这个参数，这个是堆外缓存池大小，这个这个默认为5，配置成5需要占用5G空间，配置成2就占用2G空间
         this.poolSize = storeConfig.getTransientStorePoolSize();
         this.fileSize = storeConfig.getMappedFileSizeCommitLog();
         this.availableBuffers = new ConcurrentLinkedDeque<>();
@@ -48,12 +49,13 @@ public class TransientStorePool {
      */
     public void init() {
         for (int i = 0; i < poolSize; i++) {
+            // 申请直接内存buffer
             ByteBuffer byteBuffer = ByteBuffer.allocateDirect(fileSize);
 
             final long address = ((DirectBuffer) byteBuffer).address();
             Pointer pointer = new Pointer(address);
             LibC.INSTANCE.mlock(pointer, new NativeLong(fileSize));
-
+            // buffer 塞入队列中
             availableBuffers.offer(byteBuffer);
         }
     }
@@ -74,6 +76,7 @@ public class TransientStorePool {
 
     public ByteBuffer borrowBuffer() {
         ByteBuffer buffer = availableBuffers.pollFirst();
+        // 如果可用队列数量小于40%，打印日志
         if (availableBuffers.size() < poolSize * 0.4) {
             log.warn("TransientStorePool only remain {} sheets.", availableBuffers.size());
         }
