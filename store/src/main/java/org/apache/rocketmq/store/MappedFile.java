@@ -303,6 +303,9 @@ public class MappedFile extends ReferenceResource {
                 try {
                     //We only append data to fileChannel or mappedByteBuffer, never both.
                     if (writeBuffer != null || this.fileChannel.position() != 0) {
+                        // 方法将通道里尚未写入磁盘的数据强制写到磁盘上。
+                        //出于性能方面的考虑，操作系统会将数据缓存在内存中，所以无法保证写入到FileChannel里的数据一定会即时写到磁盘上。
+                        //要保证这一点，需要调用force()方法。force()方法有一个boolean类型的参数，指明是否同时将文件元数据（权限信息等）写
                         this.fileChannel.force(false);
                     } else {
                         this.mappedByteBuffer.force();
@@ -326,6 +329,7 @@ public class MappedFile extends ReferenceResource {
             //no need to commit data to file channel, so just regard wrotePosition as committedPosition.
             return this.wrotePosition.get();
         }
+        // 如果待提交数据不满commitLeastPages(默认4*4kb)，则不执行本次提交操作
         if (this.isAbleToCommit(commitLeastPages)) {
             if (this.hold()) {
                 commit0();
@@ -340,21 +344,27 @@ public class MappedFile extends ReferenceResource {
             this.transientStorePool.returnBuffer(writeBuffer);
             this.writeBuffer = null;
         }
-
+        // 返回commit 位置
         return this.committedPosition.get();
     }
 
+    /**
+     * commit 就是把bytebuffer中的数据写入到fileChannel中
+     */
     protected void commit0() {
         int writePos = this.wrotePosition.get();
         int lastCommittedPosition = this.committedPosition.get();
-
+        // 如果写指针大于上一次提交指针
         if (writePos - lastCommittedPosition > 0) {
             try {
                 ByteBuffer byteBuffer = writeBuffer.slice();
+                // 从lastCommittedPosition开始写，写到writePos结束
                 byteBuffer.position(lastCommittedPosition);
                 byteBuffer.limit(writePos);
+                // 把writeBuffer写入到fileChannel中
                 this.fileChannel.position(lastCommittedPosition);
                 this.fileChannel.write(byteBuffer);
+                // 移动writeBuffer中的committedPosition
                 this.committedPosition.set(writePos);
             } catch (Throwable e) {
                 log.error("Error occurred when commit data to FileChannel.", e);
@@ -385,11 +395,11 @@ public class MappedFile extends ReferenceResource {
         if (this.isFull()) {
             return true;
         }
-
+        // 如果可刷入页大于配置页，需要commit
         if (commitLeastPages > 0) {
             return ((write / OS_PAGE_SIZE) - (flush / OS_PAGE_SIZE)) >= commitLeastPages;
         }
-
+        // 如果write大于flush，就flush一次
         return write > flush;
     }
 

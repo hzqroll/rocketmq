@@ -23,7 +23,7 @@ public abstract class ReferenceResource {
     protected volatile boolean available = true;
     protected volatile boolean cleanupOver = false;
     private volatile long firstShutdownTimestamp = 0;
-
+    // 枷锁
     public synchronized boolean hold() {
         if (this.isAvailable()) {
             if (this.refCount.getAndIncrement() > 0) {
@@ -45,7 +45,9 @@ public abstract class ReferenceResource {
             this.available = false;
             this.firstShutdownTimestamp = System.currentTimeMillis();
             this.release();
+            // 如果还有引用
         } else if (this.getRefCount() > 0) {
+            // 判断首次删除时间是否超过intervalForcibly
             if ((System.currentTimeMillis() - this.firstShutdownTimestamp) >= intervalForcibly) {
                 this.refCount.set(-1000 - this.getRefCount());
                 this.release();
@@ -55,6 +57,7 @@ public abstract class ReferenceResource {
 
     public void release() {
         long value = this.refCount.decrementAndGet();
+        // 如果还有引用，就不删除
         if (value > 0)
             return;
 

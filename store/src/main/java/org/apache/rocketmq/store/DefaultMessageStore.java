@@ -1314,8 +1314,13 @@ public class DefaultMessageStore implements MessageStore {
         }, 1000L, 10000L, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * 文件定时清除
+     */
     private void cleanFilesPeriodically() {
+        // 清除存储文件
         this.cleanCommitLogService.run();
+        // 清除消息消费队列
         this.cleanConsumeQueueService.run();
     }
 
@@ -1585,12 +1590,17 @@ public class DefaultMessageStore implements MessageStore {
 
         private void deleteExpiredFiles() {
             int deleteCount = 0;
+            // 文件保留时间
             long fileReservedTime = DefaultMessageStore.this.getMessageStoreConfig().getFileReservedTime();
+            // 删除物理文件的间隔，因为在一次清除过程中，可能需要被删除的额文件不止一个，改值制定了两次删除文件的间隔时间
             int deletePhysicFilesInterval = DefaultMessageStore.this.getMessageStoreConfig().getDeleteCommitLogFilesInterval();
+            // 表示第一次被拒绝删除之后能保留的最大时间，在此时间内，同样可以被拒绝删除
             int destroyMapedFileIntervalForcibly = DefaultMessageStore.this.getMessageStoreConfig().getDestroyMapedFileIntervalForcibly();
-
+            // 指定删除文件时间点，rocketMQ通过设置一天的固定时间执行一次过期文件操作，默认凌晨四点
             boolean timeup = this.isTimeToDelete();
+            // 是否空间满了
             boolean spacefull = this.isSpaceToDelete();
+            // 手工删除
             boolean manualDelete = this.manualDeleteFileSeveralTimes > 0;
 
             if (timeup || spacefull || manualDelete) {
@@ -1645,6 +1655,7 @@ public class DefaultMessageStore implements MessageStore {
         }
 
         private boolean isSpaceToDelete() {
+            // 超过多少比例，可以执行删除
             double ratio = DefaultMessageStore.this.getMessageStoreConfig().getDiskMaxUsedSpaceRatio() / 100.0;
 
             cleanImmediately = false;

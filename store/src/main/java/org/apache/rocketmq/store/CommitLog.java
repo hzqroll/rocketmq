@@ -1007,6 +1007,7 @@ public class CommitLog {
                         CommitLog.this.defaultMessageStore.getMessageStoreConfig().getCommitCommitLogThoroughInterval();
 
                 long begin = System.currentTimeMillis();
+                // 超过指定时间，必须commit一次
                 if (begin >= (this.lastCommitTimestamp + commitDataThoroughInterval)) {
                     this.lastCommitTimestamp = begin;
                     commitDataLeastPages = 0;
@@ -1015,7 +1016,9 @@ public class CommitLog {
                 try {
                     boolean result = CommitLog.this.mappedFileQueue.commit(commitDataLeastPages);
                     long end = System.currentTimeMillis();
+                    // 如果commit成功了
                     if (!result) {
+                        // 设置上次commit时间
                         this.lastCommitTimestamp = end; // result = false means some data committed.
                         //now wake up flush thread.
                         flushCommitLogService.wakeup();
@@ -1167,7 +1170,10 @@ public class CommitLog {
     }
 
     /**
+     * https://blog.csdn.net/ph3636/article/details/89721272
      * GroupCommit Service
+     * 刷盘线程，等待的话，就会组装请求GroupCommitRequest放到线程的requestsWrite中，这里需要进行加锁，因为线程在一直访问写集合，然后用cas操作进行单次通知，然后就是用countDownLatch通知，因为该数量是1，所以每次只能通知一次，这里需要用到cas操作，而且每次等待都会复原countDownLatch，等待结束后也会设置hasNotified.set(false);，
+     * 当请求结合中没有请求时，就会每隔10ms执行刷盘操作，当给写集合中放入请求时，线程等待立马唤醒，执行交换读写集合的操作，这个时候读集合中就会有请求，然后就会到达doCommit方法，开始进行同步刷盘，首先判断文件队列中的刷盘下标是否小于请求的下标，大于等于的话就代表已经刷盘结束
      */
     class GroupCommitService extends FlushCommitLogService {
         private volatile LinkedList<GroupCommitRequest> requestsWrite = new LinkedList<GroupCommitRequest>();
@@ -1184,6 +1190,10 @@ public class CommitLog {
             this.wakeup();
         }
 
+        /**
+         * 交换请求列表
+         * write和read交换，一个写，一个读，不影响
+         */
         private void swapRequests() {
             lock.lock();
             try {
@@ -1199,9 +1209,10 @@ public class CommitLog {
             if (!this.requestsRead.isEmpty()) {
                 for (GroupCommitRequest req : this.requestsRead) {
                     // There may be a message in the next file, so a maximum of
-                    // two times the flush
+                    // two times the flush 当前刷新的位置是否大于等于下一个节点，判断是否已经刷盘完成
                     boolean flushOK = CommitLog.this.mappedFileQueue.getFlushedWhere() >= req.getNextOffset();
                     for (int i = 0; i < 2 && !flushOK; i++) {
+                        // 参数是0 ，表示无论如何都要刷一次
                         CommitLog.this.mappedFileQueue.flush(0);
                         flushOK = CommitLog.this.mappedFileQueue.getFlushedWhere() >= req.getNextOffset();
                     }
@@ -1222,11 +1233,13 @@ public class CommitLog {
             }
         }
 
+        @Override
         public void run() {
             CommitLog.log.info(this.getServiceName() + " service started");
 
             while (!this.isStopped()) {
                 try {
+                    // 10ms刷新一次
                     this.waitForRunning(10);
                     this.doCommit();
                 } catch (Exception e) {
@@ -1235,7 +1248,8 @@ public class CommitLog {
             }
 
             // Under normal circumstances shutdown, wait for the arrival of the
-            // request, and then flush
+            // request, and then flush 等待请求10ms
+            // 如果 被 shutdown了，再刷一次，确保数据都已经被刷盘
             try {
                 Thread.sleep(10);
             } catch (InterruptedException e) {

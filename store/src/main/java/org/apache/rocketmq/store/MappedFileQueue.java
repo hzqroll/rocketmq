@@ -358,6 +358,13 @@ public class MappedFileQueue {
         }
     }
 
+    /**
+     * @param expiredTime 文件删除间隔
+     * @param deleteFilesInterval  删除物理文件的间隔
+     * @param intervalForcibly 第一次拒绝删除后，保留的最大间隔
+     * @param cleanImmediately 是否立即删除
+     * @return
+     */
     public int deleteExpiredFileByTime(final long expiredTime,
                                        final int deleteFilesInterval,
                                        final long intervalForcibly,
@@ -374,7 +381,9 @@ public class MappedFileQueue {
             for (int i = 0; i < mfsLength; i++) {
                 MappedFile mappedFile = (MappedFile) mfs[i];
                 long liveMaxTimestamp = mappedFile.getLastModifiedTimestamp() + expiredTime;
+                // 如果已经过期了，并且可以被删除
                 if (System.currentTimeMillis() >= liveMaxTimestamp || cleanImmediately) {
+                    //
                     if (mappedFile.destroy(intervalForcibly)) {
                         files.add(mappedFile);
                         deleteCount++;
@@ -466,12 +475,19 @@ public class MappedFileQueue {
         return result;
     }
 
+    /**
+     * 如果没有commit 返回true
+     * @param commitLeastPages
+     * @return
+     */
     public boolean commit(final int commitLeastPages) {
         boolean result = true;
         MappedFile mappedFile = this.findMappedFileByOffset(this.committedWhere, this.committedWhere == 0);
         if (mappedFile != null) {
             int offset = mappedFile.commit(commitLeastPages);
+            // where = mappedFiled committed位置
             long where = mappedFile.getFileFromOffset() + offset;
+            // 如果 where = 当前committedWhere 代表什么呢？没有commit！
             result = where == this.committedWhere;
             this.committedWhere = where;
         }
